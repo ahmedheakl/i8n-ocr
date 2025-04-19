@@ -402,7 +402,8 @@ def main():
         "layouts": "output/layouts",
         "markdown": "output/markdown_outputs",
         "doctag_html": "output/doctag_html_outputs",
-        "doctag_otsl": "output/doctag_otsl_outputs"
+        "doctag_otsl": "output/doctag_otsl_outputs",
+        "languages": "output/languages",
     }
     
     for dir_name in output_dirs.values():
@@ -433,7 +434,12 @@ def main():
         tables = {}
         astray_cells = []
         elements = []
-        
+        page_languages = text_annot.get('metadata', {}).get('languages_fasttext', {'__label__unknown': 1})
+        page_top_language = max(page_languages, key=page_languages.get)
+        page_language = page_top_language.split('__label__')[-1]
+        page_language_conf = page_languages[page_top_language]
+        if page_language == 'unknown':
+            continue
         # Process layout annotations
         for ent, meta in layout_annot['entities'].items():
             for lay in meta:
@@ -512,7 +518,7 @@ def main():
         
         # Process tables
         for table_id, table_data in tables.items():
-            print(f"Got {len(table_data['rows'])} rows and {len(table_data['columns'])} columns")
+            # print(f"Got {len(table_data['rows'])} rows and {len(table_data['columns'])} columns")
             tables[table_id]["rows_data"] = {}
             table_bbox = table_data['bbox']
             
@@ -579,8 +585,12 @@ def main():
                         table_data['rows_data'][row_id].append(cell)
                         num_cells += 1
             
-            print(f"Got {num_cells} cells")
-            rows = sort_rows(table_data['rows_data'], table_data['rows'])
+            # print(f"Got {num_cells} cells")
+            try:
+                rows = sort_rows(table_data['rows_data'], table_data['rows'])
+            except Exception as e:
+                print(f"Error sorting rows: {e}")
+                continue
             html_table = rows_to_html_table(rows)
             elements.append({
                 "bbox": table_data['bbox'],
@@ -590,7 +600,7 @@ def main():
                 "type": "table",
             })
             
-            print(html_table)
+            # print(html_table)
 
         elements = sorted(elements, key=lambda x: (x['bbox'][1], x['bbox'][0]))
         md = ""
@@ -608,9 +618,15 @@ def main():
             
         with open(os.path.join(output_dirs["doctag_otsl"], f"{page_name}.dt.xml"), "w", encoding="utf-8") as f:
             f.write(doctag_otsl)
-        
+
+        with open(os.path.join(output_dirs["languages"], f"{page_name}.json"), "w", encoding="utf-8") as f:
+            json.dump({
+                "language": page_language,
+                "confidence": page_language_conf
+            }, f, indent=4)
         image.save(os.path.join(output_dirs["layouts"], f"{page_name}.jpg"))
-        print(f"{'#' * 10} {page_name} {'#' * 10}")
+        print("Language:", page_language)
+        # print(f"{'#' * 10} {page_name} {'#' * 10}")
 
 if __name__ == "__main__":
     main()
